@@ -3,15 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Pac-Man</title>
+    <title>Pac-Man Game</title>
     <style>
         body {
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
             background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        #gameInfo {
+            color: white;
+            margin-bottom: 10px;
         }
         #gameCanvas {
             border: 2px solid #00F;
@@ -19,39 +25,123 @@
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="gameInfo">
+        <span id="levelDisplay"></span>
+        <span id="livesDisplay"></span>
+        <span id="scoreDisplay"></span>
+    </div>
+    <canvas id="gameCanvas" width="560" height="620"></canvas>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const levelDisplay = document.getElementById('levelDisplay');
 
         const CELL_SIZE = 20;
         const GRID_WIDTH = canvas.width / CELL_SIZE;
         const GRID_HEIGHT = canvas.height / CELL_SIZE;
 
         let pacman = {
-            x: 1,
-            y: 1,
+            x: 14,
+            y: 23,
             direction: { x: 0, y: 0 },
             nextDirection: { x: 0, y: 0 }
         };
 
         let ghosts = [
-            { x: 18, y: 1, color: 'red' },
-            { x: 18, y: 18, color: 'pink' },
-            { x: 1, y: 18, color: 'cyan' },
-            { x: 9, y: 9, color: 'orange' }
+            { x: 13, y: 11, color: 'red', state: 'scatter' },
+            { x: 14, y: 11, color: 'pink', state: 'scatter' },
+            { x: 13, y: 15, color: 'cyan', state: 'scatter' },
+            { x: 14, y: 15, color: 'orange', state: 'scatter' }
         ];
 
         let pellets = [];
+        let powerPellets = [];
+        let fruit = null;
         let score = 0;
-        let lastUpdateTime = 0;
-        const MOVE_INTERVAL = 200; // milliseconds
+        let lives = 3;
+        let currentLevel = 1;
+        let ghostVulnerable = false;
+        let vulnerableTimer = 0;
+        const VULNERABLE_DURATION = 10000; // 10 seconds
+        let fruitTimer = 0;
+        const FRUIT_INTERVAL = 10000; // 10 seconds
+		let fruitCount = 0;
+		const MAX_FRUITS_PER_LEVEL = 3;
+
+        let pacmanMoveTimer = 0;
+        let ghostMoveTimer = 0;
+        const PACMAN_MOVE_INTERVAL = 100; // milliseconds
+        const GHOST_MOVE_INTERVAL = 150; // milliseconds
+
+        let maze = [
+            "############################",
+            "#............##............#",
+            "#.####.#####.##.#####.####.#",
+            "#o####.#####.##.#####.####o#",
+            "#.####.#####.##.#####.####.#",
+            "#..........................#",
+            "#.####.##.########.##.####.#",
+            "#.####.##.########.##.####.#",
+            "#......##....##....##......#",
+            "######.##### ## #####.######",
+            "######.##### ## #####.######",
+            "######.##    --    ##.######",
+            "######.## ###--### ##.######",
+            "######.## #      # ##.######",
+            "      .   #      #   .      ",
+            "######.## #      # ##.######",
+            "######.## ######## ##.######",
+            "######.##          ##.######",
+            "######.## ######## ##.######",
+            "######.## ######## ##.######",
+            "#............##............#",
+            "#.####.#####.##.#####.####.#",
+            "#.####.#####.##.#####.####.#",
+            "#o..##........P.......##..o#",
+            "###.##.##.########.##.##.###",
+            "###.##.##.########.##.##.###",
+            "#......##....##....##......#",
+            "#.##########.##.##########.#",
+            "#.##########.##.##########.#",
+            "#..........................#",
+            "############################"
+        ];
+
+        function initializeGame() {
+            initializePellets();
+            initializePowerPellets();
+        }
 
         function initializePellets() {
+            pellets = [];
             for (let y = 0; y < GRID_HEIGHT; y++) {
                 for (let x = 0; x < GRID_WIDTH; x++) {
-                    if (x % 2 === 1 && y % 2 === 1) {
+                    if (maze[y][x] === '.') {
                         pellets.push({ x, y });
+                    }
+                }
+            }
+        }
+
+        function initializePowerPellets() {
+            powerPellets = [];
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (maze[y][x] === 'o') {
+                        powerPellets.push({ x, y });
+                    }
+                }
+            }
+        }
+
+        function drawMaze() {
+            ctx.fillStyle = 'blue';
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (maze[y][x] === '#') {
+                        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
                     }
                 }
             }
@@ -70,7 +160,7 @@
             ghosts.forEach(ghost => {
                 ctx.beginPath();
                 ctx.arc(ghost.x * CELL_SIZE + CELL_SIZE / 2, ghost.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2, 0, 2 * Math.PI);
-                ctx.fillStyle = ghost.color;
+                ctx.fillStyle = ghost.state === 'vulnerable' ? 'blue' : ghost.color;
                 ctx.fill();
                 ctx.closePath();
             });
@@ -86,85 +176,292 @@
             });
         }
 
-        function drawScore() {
+        function drawPowerPellets() {
             ctx.fillStyle = 'white';
-            ctx.font = '20px Arial';
-            ctx.fillText(`Score: ${score}`, 10, 30);
+            powerPellets.forEach(pellet => {
+                ctx.beginPath();
+                ctx.arc(pellet.x * CELL_SIZE + CELL_SIZE / 2, pellet.y * CELL_SIZE + CELL_SIZE / 2, 5, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.closePath();
+            });
         }
 
-        function update(currentTime) {
-            if (currentTime - lastUpdateTime > MOVE_INTERVAL) {
-                // Update Pac-Man position
-                if (pacman.nextDirection.x !== 0 || pacman.nextDirection.y !== 0) {
+		function drawFruit() {
+			if (fruit) {
+				ctx.fillStyle = 'red';
+				ctx.beginPath();
+				ctx.arc(fruit.x * CELL_SIZE + CELL_SIZE / 2, fruit.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2 - 2, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.strokeStyle = 'white';
+				ctx.lineWidth = 2;
+				ctx.stroke();
+			}
+		}
+
+        function updateScore() {
+            scoreDisplay.textContent = `Score: ${score}`;
+        }
+
+        function updateLives() {
+            livesDisplay.textContent = `Lives: ${lives}`;
+        }
+
+        function updateLevelDisplay() {
+            levelDisplay.textContent = `Level: ${currentLevel}`;
+        }
+
+        function isValidMove(x, y) {
+            return maze[Math.floor(y)] && maze[Math.floor(y)][Math.floor(x)] && maze[Math.floor(y)][Math.floor(x)] !== '#';
+        }
+
+        function movePacman() {
+            if (pacman.nextDirection.x !== 0 || pacman.nextDirection.y !== 0) {
+                if (isValidMove(pacman.x + pacman.nextDirection.x, pacman.y + pacman.nextDirection.y)) {
                     pacman.direction = { ...pacman.nextDirection };
                 }
-                pacman.x += pacman.direction.x;
-                pacman.y += pacman.direction.y;
+            }
+            
+            let newX = pacman.x + pacman.direction.x;
+            let newY = pacman.y + pacman.direction.y;
 
-                // Wrap around the screen
-                pacman.x = (pacman.x + GRID_WIDTH) % GRID_WIDTH;
-                pacman.y = (pacman.y + GRID_HEIGHT) % GRID_HEIGHT;
+            // Wrap around for Pac-Man
+            if (newX < 0) newX = GRID_WIDTH - 1;
+            if (newX >= GRID_WIDTH) newX = 0;
+            if (newY === 14 && (newX === 0 || newX === GRID_WIDTH - 1)) {
+                newX = (newX === 0) ? GRID_WIDTH - 1 : 0;
+            }
 
-                // Check for pellet collection
-                pellets = pellets.filter(pellet => {
-                    if (pellet.x === pacman.x && pellet.y === pacman.y) {
-                        score += 10;
-                        return false;
+            if (isValidMove(newX, newY)) {
+                pacman.x = newX;
+                pacman.y = newY;
+            }
+
+            collectPellets();
+        }
+
+        function moveGhost(ghost) {
+            let possibleMoves = [];
+            [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
+                const newX = Math.floor(ghost.x + dx);
+                const newY = Math.floor(ghost.y + dy);
+                if (isValidMove(newX, newY) && maze[newY][newX] !== '-') {
+                    possibleMoves.push([dx, dy]);
+                }
+            });
+            
+            if (possibleMoves.length > 0) {
+                let [dx, dy] = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                
+                if (ghost.state !== 'vulnerable') {
+                    // Simple chase logic when not vulnerable
+                    const targetX = pacman.x - ghost.x;
+                    const targetY = pacman.y - ghost.y;
+                    const closestMove = possibleMoves.reduce((closest, move) => {
+                        const distance = Math.abs(targetX - move[0]) + Math.abs(targetY - move[1]);
+                        return distance < closest.distance ? { move, distance } : closest;
+                    }, { move: null, distance: Infinity });
+                    
+                    if (closestMove.move) {
+                        [dx, dy] = closestMove.move;
                     }
-                    return true;
-                });
+                }
 
-                // Move ghosts (very simple AI)
-                ghosts.forEach(ghost => {
-                    let dx = Math.sign(pacman.x - ghost.x);
-                    let dy = Math.sign(pacman.y - ghost.y);
-                    if (Math.random() < 0.5) {
-                        ghost.x += dx;
-                    } else {
-                        ghost.y += dy;
-                    }
-                    ghost.x = (ghost.x + GRID_WIDTH) % GRID_WIDTH;
-                    ghost.y = (ghost.y + GRID_HEIGHT) % GRID_HEIGHT;
-                });
+                // Move ghost
+                ghost.x += dx;
+                ghost.y += dy;
 
-                lastUpdateTime = currentTime;
+                // Ensure ghost stays within grid
+                ghost.x = Math.max(0, Math.min(GRID_WIDTH - 1, ghost.x));
+                ghost.y = Math.max(0, Math.min(GRID_HEIGHT - 1, ghost.y));
+            }
+
+            // Allow ghosts to exit the box
+            if (Math.floor(ghost.y) === 14 && (Math.floor(ghost.x) === 13 || Math.floor(ghost.x) === 14) && Math.random() < 0.1) {
+                ghost.y = 11;
             }
         }
 
+		function collectPellets() {
+			pellets = pellets.filter(pellet => {
+				if (Math.floor(pellet.x) === Math.floor(pacman.x) && Math.floor(pellet.y) === Math.floor(pacman.y)) {
+					score += 10;
+					updateScore();
+					return false;
+				}
+				return true;
+			});
+
+			powerPellets = powerPellets.filter(pellet => {
+				if (Math.floor(pellet.x) === Math.floor(pacman.x) && Math.floor(pellet.y) === Math.floor(pacman.y)) {
+					score += 50;
+					updateScore();
+					ghostVulnerable = true;
+					vulnerableTimer = Date.now();
+					ghosts.forEach(ghost => {
+						ghost.state = 'vulnerable';
+						ghost.vulnerableTime = Date.now();
+					});
+					return false;
+				}
+				return true;
+			});
+
+			// Check for fruit collection
+			if (fruit && Math.floor(fruit.x) === Math.floor(pacman.x) && Math.floor(fruit.y) === Math.floor(pacman.y)) {
+				score += 500;
+				updateScore();
+				fruit = null;
+				fruitTimer = Date.now();
+			}
+		}
+
         function checkCollisions() {
-            ghosts.forEach(ghost => {
-                if (ghost.x === pacman.x && ghost.y === pacman.y) {
-                    alert('Game Over! Your score: ' + score);
-                    resetGame();
+            ghosts.forEach((ghost, index) => {
+                const dx = ghost.x - pacman.x;
+                const dy = ghost.y - pacman.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 0.7) {
+                    if (ghost.state === 'vulnerable') {
+                        // Pac-Man eats the ghost
+                        score += 200;
+                        updateScore();
+                        resetGhost(ghost);
+                    } else {
+                        // Ghost catches Pac-Man
+                        lives--;
+                        updateLives();
+                        if (lives > 0) {
+                            resetPositions();
+                        } else {
+                            alert(`Game Over! Your score: ${score}\nYou reached level ${currentLevel}`);
+                            resetGame();
+                        }
+                    }
                 }
             });
 
-            if (pellets.length === 0) {
-                alert('You Win! Your score: ' + score);
-                resetGame();
+            if (pellets.length === 0 && powerPellets.length === 0) {
+                alert(`Congratulations! You've completed level ${currentLevel}!`);
+                resetGame(true);
             }
         }
 
-        function resetGame() {
-            pacman = { x: 1, y: 1, direction: { x: 0, y: 0 }, nextDirection: { x: 0, y: 0 } };
-            ghosts = [
-                { x: 18, y: 1, color: 'red' },
-                { x: 18, y: 18, color: 'pink' },
-                { x: 1, y: 18, color: 'cyan' },
-                { x: 9, y: 9, color: 'orange' }
-            ];
-            score = 0;
-            initializePellets();
+        function resetPositions() {
+            pacman = { x: 14, y: 23, direction: { x: 0, y: 0 }, nextDirection: { x: 0, y: 0 } };
+            ghosts.forEach((ghost, index) => {
+                ghost.x = 13 + (index % 2);
+                ghost.y = 11 + (Math.floor(index / 2) * 4);
+                ghost.state = 'scatter';
+            });
         }
 
-        function gameLoop(currentTime) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            update(currentTime);
+        function resetGhost(ghost) {
+            ghost.x = 13;
+            ghost.y = 11;
+            ghost.state = 'scatter';
+        }
+
+        function addGhost() {
+            const colors = ['purple', 'brown', 'lightgreen', 'lightblue', 'gold', 'silver'];
+            const newColor = colors[Math.min(ghosts.length, colors.length - 1)];
+            ghosts.push({ x: 13, y: 11, color: newColor, state: 'scatter' });
+        }
+
+		function resetGame(nextLevel = false) {
+			if (nextLevel) {
+				currentLevel++;
+				addGhost();
+			} else {
+				currentLevel = 1;
+				ghosts = [
+					{ x: 13, y: 11, color: 'red', state: 'scatter' },
+					{ x: 14, y: 11, color: 'pink', state: 'scatter' },
+					{ x: 13, y: 15, color: 'cyan', state: 'scatter' },
+					{ x: 14, y: 15, color: 'orange', state: 'scatter' }
+				];
+			}
+			resetPositions();
+			score = nextLevel ? score : 0;
+			lives = 3;
+			ghostVulnerable = false;
+			fruit = null;
+			fruitTimer = Date.now();
+			fruitCount = 0;
+			initializeGame();
+			updateScore();
+			updateLives();
+			updateLevelDisplay();
+		}
+
+        function update(deltaTime) {
+            // Update Pac-Man
+            pacmanMoveTimer += deltaTime;
+            if (pacmanMoveTimer >= PACMAN_MOVE_INTERVAL) {
+                movePacman();
+                pacmanMoveTimer = 0;
+            }
+
+            // Update ghosts
+            ghostMoveTimer += deltaTime;
+            if (ghostMoveTimer >= GHOST_MOVE_INTERVAL) {
+                ghosts.forEach(ghost => moveGhost(ghost));
+                ghostMoveTimer = 0;
+            }
+
+            // Check for collisions
             checkCollisions();
+
+            // Check power pellet effect
+            if (ghostVulnerable && Date.now() - vulnerableTimer > VULNERABLE_DURATION) {
+                ghostVulnerable = false;
+                ghosts.forEach(ghost => {
+                    if (ghost.state === 'vulnerable') {
+                        ghost.state = 'scatter';
+                    }
+                });
+            }
+
+			// Spawn fruit
+			if (!fruit && fruitCount < MAX_FRUITS_PER_LEVEL && Date.now() - fruitTimer > FRUIT_INTERVAL) {
+				spawnFruit();
+			}
+					
+			// Check for collisions
+			checkCollisions();
+        }
+		
+		function spawnFruit() {
+			if (fruitCount < MAX_FRUITS_PER_LEVEL) {
+				do {
+					fruit = { 
+						x: Math.floor(Math.random() * GRID_WIDTH), 
+						y: Math.floor(Math.random() * GRID_HEIGHT) 
+					};
+				} while (!isValidMove(fruit.x, fruit.y) || maze[fruit.y][fruit.x] === '-');
+				fruitTimer = Date.now();
+				fruitCount++;
+			}
+		}
+		
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawMaze();
             drawPellets();
+            drawPowerPellets();
+            drawFruit();
             drawPacman();
             drawGhosts();
-            drawScore();
+        }
+
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            update(deltaTime);
+            draw();
+
             requestAnimationFrame(gameLoop);
         }
 
@@ -185,7 +482,11 @@
             }
         });
 
-        initializePellets();
+        // Initialize and start the game
+        initializeGame();
+        updateScore();
+        updateLives();
+        updateLevelDisplay();
         requestAnimationFrame(gameLoop);
     </script>
 </body>
