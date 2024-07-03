@@ -281,39 +281,39 @@
             }
         }
 
-		function collectPellets() {
-			pellets = pellets.filter(pellet => {
-				if (Math.floor(pellet.x) === Math.floor(pacman.x) && Math.floor(pellet.y) === Math.floor(pacman.y)) {
-					score += 10;
-					updateScore();
-					return false;
-				}
-				return true;
-			});
-
-			powerPellets = powerPellets.filter(pellet => {
-				if (Math.floor(pellet.x) === Math.floor(pacman.x) && Math.floor(pellet.y) === Math.floor(pacman.y)) {
-					score += 50;
-					updateScore();
-					ghostVulnerable = true;
-					vulnerableTimer = Date.now();
-					ghosts.forEach(ghost => {
-						ghost.state = 'vulnerable';
-						ghost.vulnerableTime = Date.now();
-					});
-					return false;
-				}
-				return true;
-			});
-
-			// Check for fruit collection
-			if (fruit && Math.floor(fruit.x) === Math.floor(pacman.x) && Math.floor(fruit.y) === Math.floor(pacman.y)) {
-				score += 500;
+	function collectPellets() {
+		pellets = pellets.filter(pellet => {
+			if (Math.floor(pellet.x) === Math.floor(pacman.x) && Math.floor(pellet.y) === Math.floor(pacman.y)) {
+				score += 10;
 				updateScore();
-				fruit = null;
-				fruitTimer = Date.now();
+				return false;
 			}
+			return true;
+		});
+
+		powerPellets = powerPellets.filter(pellet => {
+			if (Math.floor(pellet.x) === Math.floor(pacman.x) && Math.floor(pellet.y) === Math.floor(pacman.y)) {
+				score += 50;
+				updateScore();
+				ghostVulnerable = true;
+				vulnerableTimer = Date.now();
+				ghosts.forEach(ghost => {
+					ghost.state = 'vulnerable';
+					ghost.vulnerableTime = Date.now();
+				});
+				return false;
+			}
+			return true;
+		});
+
+		// Check for fruit collection
+		if (fruit && Math.floor(fruit.x) === Math.floor(pacman.x) && Math.floor(fruit.y) === Math.floor(pacman.y)) {
+			score += 500;
+			updateScore();
+			fruit = null;
+			fruitTimer = Date.now();
 		}
+	}
 
         function checkCollisions() {
             ghosts.forEach((ghost, index) => {
@@ -368,31 +368,31 @@
             ghosts.push({ x: 13, y: 11, color: newColor, state: 'scatter' });
         }
 
-		function resetGame(nextLevel = false) {
-			if (nextLevel) {
-				currentLevel++;
-				addGhost();
-			} else {
-				currentLevel = 1;
-				ghosts = [
-					{ x: 13, y: 11, color: 'red', state: 'scatter' },
-					{ x: 14, y: 11, color: 'pink', state: 'scatter' },
-					{ x: 13, y: 15, color: 'cyan', state: 'scatter' },
-					{ x: 14, y: 15, color: 'orange', state: 'scatter' }
-				];
-			}
-			resetPositions();
-			score = nextLevel ? score : 0;
-			lives = 3;
-			ghostVulnerable = false;
-			fruit = null;
-			fruitTimer = Date.now();
-			fruitCount = 0;
-			initializeGame();
-			updateScore();
-			updateLives();
-			updateLevelDisplay();
+	function resetGame(nextLevel = false) {
+		if (nextLevel) {
+			currentLevel++;
+			addGhost();
+		} else {
+			currentLevel = 1;
+			ghosts = [
+				{ x: 13, y: 11, color: 'red', state: 'scatter' },
+				{ x: 14, y: 11, color: 'pink', state: 'scatter' },
+				{ x: 13, y: 15, color: 'cyan', state: 'scatter' },
+				{ x: 14, y: 15, color: 'orange', state: 'scatter' }
+			];
 		}
+		resetPositions();
+		score = nextLevel ? score : 0;
+		lives = 3;
+		ghostVulnerable = false;
+		fruit = null;
+		fruitTimer = Date.now();
+		fruitCount = 0;
+		initializeGame();
+		updateScore();
+		updateLives();
+		updateLevelDisplay();
+	}
 
         function update(deltaTime) {
             // Update Pac-Man
@@ -422,27 +422,27 @@
                 });
             }
 
-			// Spawn fruit
-			if (!fruit && fruitCount < MAX_FRUITS_PER_LEVEL && Date.now() - fruitTimer > FRUIT_INTERVAL) {
-				spawnFruit();
-			}
+		// Spawn fruit
+		if (!fruit && fruitCount < MAX_FRUITS_PER_LEVEL && Date.now() - fruitTimer > FRUIT_INTERVAL) {
+			spawnFruit();
+		}
 					
-			// Check for collisions
-			checkCollisions();
+		// Check for collisions
+		checkCollisions();
         }
 		
-		function spawnFruit() {
-			if (fruitCount < MAX_FRUITS_PER_LEVEL) {
-				do {
-					fruit = { 
-						x: Math.floor(Math.random() * GRID_WIDTH), 
-						y: Math.floor(Math.random() * GRID_HEIGHT) 
-					};
-				} while (!isValidMove(fruit.x, fruit.y) || maze[fruit.y][fruit.x] === '-');
-				fruitTimer = Date.now();
-				fruitCount++;
-			}
+	function spawnFruit() {
+		if (fruitCount < MAX_FRUITS_PER_LEVEL) {
+			do {
+				fruit = { 
+					x: Math.floor(Math.random() * GRID_WIDTH), 
+					y: Math.floor(Math.random() * GRID_HEIGHT) 
+				};
+			} while (!isValidMove(fruit.x, fruit.y) || maze[fruit.y][fruit.x] === '-');
+			fruitTimer = Date.now();
+			fruitCount++;
 		}
+	}
 		
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
