@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Pac-Man</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000;
+        }
+        #gameCanvas {
+            border: 2px solid #00F;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const CELL_SIZE = 20;
+        const GRID_WIDTH = canvas.width / CELL_SIZE;
+        const GRID_HEIGHT = canvas.height / CELL_SIZE;
+
+        let pacman = {
+            x: 1,
+            y: 1,
+            direction: { x: 0, y: 0 },
+            nextDirection: { x: 0, y: 0 }
+        };
+
+        let ghosts = [
+            { x: 18, y: 1, color: 'red' },
+            { x: 18, y: 18, color: 'pink' },
+            { x: 1, y: 18, color: 'cyan' },
+            { x: 9, y: 9, color: 'orange' }
+        ];
+
+        let pellets = [];
+        let score = 0;
+        let lastUpdateTime = 0;
+        const MOVE_INTERVAL = 200; // milliseconds
+
+        function initializePellets() {
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (x % 2 === 1 && y % 2 === 1) {
+                        pellets.push({ x, y });
+                    }
+                }
+            }
+        }
+
+        function drawPacman() {
+            ctx.beginPath();
+            ctx.arc(pacman.x * CELL_SIZE + CELL_SIZE / 2, pacman.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2, 0.2 * Math.PI, 1.8 * Math.PI);
+            ctx.lineTo(pacman.x * CELL_SIZE + CELL_SIZE / 2, pacman.y * CELL_SIZE + CELL_SIZE / 2);
+            ctx.fillStyle = 'yellow';
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawGhosts() {
+            ghosts.forEach(ghost => {
+                ctx.beginPath();
+                ctx.arc(ghost.x * CELL_SIZE + CELL_SIZE / 2, ghost.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2, 0, 2 * Math.PI);
+                ctx.fillStyle = ghost.color;
+                ctx.fill();
+                ctx.closePath();
+            });
+        }
+
+        function drawPellets() {
+            ctx.fillStyle = 'white';
+            pellets.forEach(pellet => {
+                ctx.beginPath();
+                ctx.arc(pellet.x * CELL_SIZE + CELL_SIZE / 2, pellet.y * CELL_SIZE + CELL_SIZE / 2, 2, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.closePath();
+            });
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+        }
+
+        function update(currentTime) {
+            if (currentTime - lastUpdateTime > MOVE_INTERVAL) {
+                // Update Pac-Man position
+                if (pacman.nextDirection.x !== 0 || pacman.nextDirection.y !== 0) {
+                    pacman.direction = { ...pacman.nextDirection };
+                }
+                pacman.x += pacman.direction.x;
+                pacman.y += pacman.direction.y;
+
+                // Wrap around the screen
+                pacman.x = (pacman.x + GRID_WIDTH) % GRID_WIDTH;
+                pacman.y = (pacman.y + GRID_HEIGHT) % GRID_HEIGHT;
+
+                // Check for pellet collection
+                pellets = pellets.filter(pellet => {
+                    if (pellet.x === pacman.x && pellet.y === pacman.y) {
+                        score += 10;
+                        return false;
+                    }
+                    return true;
+                });
+
+                // Move ghosts (very simple AI)
+                ghosts.forEach(ghost => {
+                    let dx = Math.sign(pacman.x - ghost.x);
+                    let dy = Math.sign(pacman.y - ghost.y);
+                    if (Math.random() < 0.5) {
+                        ghost.x += dx;
+                    } else {
+                        ghost.y += dy;
+                    }
+                    ghost.x = (ghost.x + GRID_WIDTH) % GRID_WIDTH;
+                    ghost.y = (ghost.y + GRID_HEIGHT) % GRID_HEIGHT;
+                });
+
+                lastUpdateTime = currentTime;
+            }
+        }
+
+        function checkCollisions() {
+            ghosts.forEach(ghost => {
+                if (ghost.x === pacman.x && ghost.y === pacman.y) {
+                    alert('Game Over! Your score: ' + score);
+                    resetGame();
+                }
+            });
+
+            if (pellets.length === 0) {
+                alert('You Win! Your score: ' + score);
+                resetGame();
+            }
+        }
+
+        function resetGame() {
+            pacman = { x: 1, y: 1, direction: { x: 0, y: 0 }, nextDirection: { x: 0, y: 0 } };
+            ghosts = [
+                { x: 18, y: 1, color: 'red' },
+                { x: 18, y: 18, color: 'pink' },
+                { x: 1, y: 18, color: 'cyan' },
+                { x: 9, y: 9, color: 'orange' }
+            ];
+            score = 0;
+            initializePellets();
+        }
+
+        function gameLoop(currentTime) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            update(currentTime);
+            checkCollisions();
+            drawPellets();
+            drawPacman();
+            drawGhosts();
+            drawScore();
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (event) => {
+            switch (event.key) {
+                case 'ArrowUp':
+                    pacman.nextDirection = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown':
+                    pacman.nextDirection = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft':
+                    pacman.nextDirection = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight':
+                    pacman.nextDirection = { x: 1, y: 0 };
+                    break;
+            }
+        });
+
+        initializePellets();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
